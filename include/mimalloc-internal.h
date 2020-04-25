@@ -85,7 +85,7 @@ void       _mi_segment_huge_page_free(mi_segment_t* segment, mi_page_t* page, mi
 void       _mi_segment_thread_collect(mi_segments_tld_t* tld);
 void       _mi_abandoned_reclaim_all(mi_heap_t* heap, mi_segments_tld_t* tld);
 void       _mi_abandoned_await_readers(void);
-
+void       _mi_reset_delayed(mi_segments_tld_t* tld);
 
 
 // "page.c"
@@ -460,6 +460,7 @@ static inline void mi_page_set_heap(mi_page_t* page, mi_heap_t* heap) {
   mi_atomic_write(&page->xheap,(uintptr_t)heap);
 }
 
+
 // Thread free flag helpers
 static inline mi_block_t* mi_tf_block(mi_thread_free_t tf) {
   return (mi_block_t*)(tf & ~0x03);
@@ -507,6 +508,15 @@ static inline mi_page_queue_t* mi_page_queue(const mi_heap_t* heap, size_t size)
   return &((mi_heap_t*)heap)->pages[_mi_bin(size)];
 }
 
+static inline bool mi_commit_on_demand(mi_page_kind_t pkind) {
+  return (pkind >= MI_PAGE_MEDIUM && 
+          !mi_option_is_enabled(mi_option_eager_page_commit) && 
+          !mi_option_is_enabled(mi_option_eager_commit));
+}
+
+static inline bool mi_page_commit_on_demand(mi_page_t* page) {
+  return mi_commit_on_demand(_mi_page_segment(page)->page_kind);
+}
 
 
 //-----------------------------------------------------------

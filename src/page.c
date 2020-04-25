@@ -589,7 +589,7 @@ static void mi_page_extend_free(mi_heap_t* heap, mi_page_t* page, mi_tld_t* tld)
   mi_assert_internal(extend < (1UL<<16));
 
   // commit on-demand for large and huge pages?
-  if (_mi_page_segment(page)->page_kind >= MI_PAGE_LARGE && !mi_option_is_enabled(mi_option_eager_page_commit)) {
+  if (mi_page_commit_on_demand(page)) {
     uint8_t* start = page_start + (page->capacity * bsize);
     _mi_mem_commit(start, extend * bsize, NULL, &tld->os);
   }
@@ -808,6 +808,9 @@ void* _mi_malloc_generic(mi_heap_t* heap, size_t size) mi_attr_noexcept
 
   // free delayed frees from other threads
   _mi_heap_delayed_free(heap);
+
+  // reset delayed reset pages
+  // _mi_reset_delayed(&heap->tld->segments);
 
   // huge allocation?
   mi_page_t* page;
