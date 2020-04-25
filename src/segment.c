@@ -33,6 +33,14 @@ static uint8_t* mi_segment_raw_page_start(const mi_segment_t* segment, const mi_
   If a  thread ends, it "abandons" pages with used blocks
   and there is an abandoned segment list whose segments can
   be reclaimed by still running threads, much like work-stealing.
+
+  various states of the pages can be:
+  - `page->segment_in_use == true`: the page is in use and contains allocated blocks.
+    this implies `page->is_committed` and `!page->is_reset`. `page->next` and `page->prev` 
+    are used for the heap local lists for that block size.
+  - `page->segment_in_use == false`: the page is not in use and has no live blocks.
+    the `page->used` field is reused as an expiration counter for delayed OS reset of the
+    page memory. 
 -------------------------------------------------------------------------------- */
 
 
@@ -228,28 +236,31 @@ static void mi_segment_protect(mi_segment_t* segment, bool protect, mi_os_tld_t*
   Page reset
 ----------------------------------------------------------- */
 
-static void mi_page_reset(mi_segment_t* segment, mi_page_t* page, size_t size, mi_segments_tld_t* tld) {
+static void mi_page_reset(mi_segment_t* segment, mi_page_t* page, size_t size, mi_os_tld_t* os_tld) {
   mi_assert_internal(page->is_committed);
   if (!mi_option_is_enabled(mi_option_page_reset)) return;
   if (segment->mem_is_fixed || page->segment_in_use || !page->is_committed || page->is_reset) return;
   size_t psize;
   void* start = mi_segment_raw_page_start(segment, page, &psize);
   page->is_reset = true;
+  page->used = 0;        // resets potential expiration count as well
   mi_assert_internal(size <= psize);
   size_t reset_size = ((size == 0 || size > psize) ? psize : size);
   if (size == 0 && segment->page_kind >= MI_PAGE_LARGE && !mi_option_is_enabled(mi_option_eager_page_commit)) {
     mi_assert_internal(page->xblock_size > 0);
     reset_size = page->capacity * mi_page_block_size(page);
   }
-  if (reset_size > 0) _mi_mem_reset(start, reset_size, tld->os);
+  if (reset_size > 0) _mi_mem_reset(start, reset_size, os_tld);
 }
 
-static void mi_page_unreset(mi_segment_t* segment, mi_page_t* page, size_t size, mi_segments_tld_t* tld)
+static void mi_page_unreset(mi_segment_t* segment, mi_page_t* page, size_t size, mi_os_tld_t* os_tld)
 {
   mi_assert_internal(page->is_reset);
   mi_assert_internal(page->is_committed);
   mi_assert_internal(!segment->mem_is_fixed);
+  if (segment->mem_is_fixed || !page->is_committed || !page->is_reset) return;
   page->is_reset = false;
+  page->used = 0;        // resets expiration as well
   size_t psize;
   uint8_t* start = mi_segment_raw_page_start(segment, page, &psize);
   size_t unreset_size = (size == 0 || size > psize ? psize : size);
@@ -258,7 +269,7 @@ static void mi_page_unreset(mi_segment_t* segment, mi_page_t* page, size_t size,
     unreset_size = page->capacity * mi_page_block_size(page);
   }
   bool is_zero = false;
-  if (unreset_size > 0) _mi_mem_unreset(start, unreset_size, &is_zero, tld->os);
+  if (unreset_size > 0) _mi_mem_unreset(start, unreset_size, &is_zero, os_tld);
   if (is_zero) page->is_zero_init = true;
 }
 
@@ -269,20 +280,23 @@ static void mi_page_unreset(mi_segment_t* segment, mi_page_t* page, size_t size,
 
 // we re-use the `used` field for the expiration counter. Since this is a
 // a 32-bit field while the clock is always 64-bit we need to guard
-// against overflow, we use substraction to check for expiry which work
-// as long as the reset delay is under (2^30 - 1) milliseconds (~12 days)
+// against overflow. We use substraction to check for expiry which works
+// as long as the reset delay is under (2^30 - 1) milliseconds (~12 days).
 static void mi_page_reset_set_expire(mi_page_t* page) {
+  mi_assert_internal(!page->segment_in_use);
   uint32_t expire = (uint32_t)_mi_clock_now() + mi_option_get(mi_option_reset_delay);
+  if (expire == 0) expire++;  // always non-zero
   page->used = expire;
 }
 
 static bool mi_page_reset_is_expired(mi_page_t* page, mi_msecs_t now) {
+  mi_assert_internal(!page->segment_in_use);
   int32_t expire = (int32_t)(page->used);
-  return (((int32_t)now - expire) >= 0);
+  return (expire == 0 || ((int32_t)now - expire) >= 0);
 }
 
 static void mi_pages_reset_add(mi_segment_t* segment, mi_page_t* page, mi_segments_tld_t* tld) {
-  mi_assert_internal(!page->segment_in_use || !page->is_committed);
+  mi_assert_internal(!page->segment_in_use && page->is_committed);
   mi_assert_internal(mi_page_not_in_queue(page,tld));
   mi_assert_expensive(!mi_pages_reset_contains(page, tld));
   mi_assert_internal(_mi_page_segment(page)==segment);
@@ -291,7 +305,7 @@ static void mi_pages_reset_add(mi_segment_t* segment, mi_page_t* page, mi_segmen
 
   if (mi_option_get(mi_option_reset_delay) == 0) {
     // reset immediately?
-    mi_page_reset(segment, page, 0, tld);
+    mi_page_reset(segment, page, 0, tld->os);
   }
   else {
     // otherwise push on the delayed page reset queue
@@ -323,7 +337,7 @@ static void mi_pages_reset_remove(mi_page_t* page, mi_segments_tld_t* tld) {
   if (page == pq->last)  pq->last = page->prev;
   if (page == pq->first) pq->first = page->next;
   page->next = page->prev = NULL;
-  page->used = 0;
+  // page->used = 0;  // leave the expiration counter so it keeps being tracked even when abandoned
 }
 
 static void mi_pages_reset_remove_all_in_segment(mi_segment_t* segment, bool force_reset, mi_segments_tld_t* tld) {
@@ -333,7 +347,7 @@ static void mi_pages_reset_remove_all_in_segment(mi_segment_t* segment, bool for
     if (!page->segment_in_use && page->is_committed && !page->is_reset) {
       mi_pages_reset_remove(page, tld);
       if (force_reset) {
-        mi_page_reset(segment, page, 0, tld);
+        mi_page_reset(segment, page, 0, tld->os);
       }
     }
     else {
@@ -350,8 +364,9 @@ static void mi_reset_delayed(mi_segments_tld_t* tld) {
   mi_page_t* page = pq->last;
   while (page != NULL && mi_page_reset_is_expired(page,now)) {
     mi_page_t* const prev = page->prev; // save previous field
-    mi_page_reset(_mi_page_segment(page), page, 0, tld);
-    page->used = 0;
+    mi_page_reset(_mi_page_segment(page), page, 0, tld->os);
+    mi_assert_internal(page->used==0);
+    page->used = 0;  // paranoia
     page->prev = page->next = NULL;
     page = prev;
   }
@@ -604,9 +619,10 @@ static mi_segment_t* mi_segment_init(mi_segment_t* segment, size_t required, mi_
         if (page->is_reset) {
           if (!commit && mi_option_is_enabled(mi_option_reset_decommits)) {
             page->is_reset = false;
+            page->used = 0;
           }
           else {
-            mi_page_unreset(segment, page, 0, tld);  // todo: only unreset the part that was reset? (instead of the full page)
+            mi_page_unreset(segment, page, 0, tld->os); 
           }
         }
       }
@@ -723,6 +739,7 @@ static bool mi_segment_page_claim(mi_segment_t* segment, mi_page_t* page, mi_seg
   mi_assert_internal(_mi_page_segment(page) == segment);
   mi_assert_internal(!page->segment_in_use);
   mi_pages_reset_remove(page, tld);
+  page->used = 0; // reset possible reset expiration counter
   // check commit
   if (!page->is_committed) {
     mi_assert_internal(!segment->mem_is_fixed);
@@ -739,20 +756,22 @@ static bool mi_segment_page_claim(mi_segment_t* segment, mi_page_t* page, mi_seg
     }
     page->is_committed = true;
   }
-  // set in-use before doing unreset to prevent delayed reset
+  // set in-use before doing unreset 
   page->segment_in_use = true;
   segment->used++;
   // check reset
   if (page->is_reset) {
-    mi_page_unreset(segment, page, 0, tld); // todo: only unreset the part that was reset?
+    mi_page_unreset(segment, page, 0, tld->os); 
   }
-  mi_assert_internal(page->segment_in_use);
+  mi_assert_internal(page->segment_in_use && page->used == 0);
   mi_assert_internal(segment->used <= segment->capacity);
   if (segment->used == segment->capacity && segment->page_kind <= MI_PAGE_MEDIUM) {
     // if no more free pages, remove from the queue
     mi_assert_internal(!mi_segment_has_free(segment));
     mi_segment_remove_from_free_queue(segment, tld);
   }
+  // and reset the previous capacity (which was used to calculate reset/commit sizes of the page)
+  page->capacity = 0;
   return true;
 }
 
@@ -763,7 +782,7 @@ static bool mi_segment_page_claim(mi_segment_t* segment, mi_page_t* page, mi_seg
 
 static void mi_segment_abandon(mi_segment_t* segment, mi_segments_tld_t* tld);
 
-// clear page data; can be called on abandoned segments
+// clear page data (cannot be called from abandoned segments as it may add to the delayed page reset queue)
 static void mi_segment_page_clear(mi_segment_t* segment, mi_page_t* page, bool allow_reset, mi_segments_tld_t* tld)
 {
   mi_assert_internal(page->segment_in_use);
@@ -775,36 +794,24 @@ static void mi_segment_page_clear(mi_segment_t* segment, mi_page_t* page, bool a
   _mi_stat_decrease(&tld->stats->page_committed, inuse);
   _mi_stat_decrease(&tld->stats->pages, 1);
 
-  // calculate the used size from the raw (non-aligned) start of the page
-  //size_t pre_size;
-  //_mi_segment_page_start(segment, page, page->block_size, NULL, &pre_size);
-  //size_t used_size = pre_size + (page->capacity * page->block_size);
-
   page->is_zero_init = false;
   page->segment_in_use = false;
 
-  // reset the page memory to reduce memory pressure?
-  // note: must come after setting `segment_in_use` to false but before block_size becomes 0
-  //mi_page_reset(segment, page, 0 /*used_size*/, tld);
-
   // zero the page data, but not the segment fields and capacity, and block_size (for page size calculations)
-  uint32_t block_size = page->xblock_size;
+  uint32_t xblock_size = page->xblock_size;
   uint16_t capacity = page->capacity;
   uint16_t reserved = page->reserved;
   ptrdiff_t ofs = offsetof(mi_page_t,capacity);
   memset((uint8_t*)page + ofs, 0, sizeof(*page) - ofs);
   page->capacity = capacity;
   page->reserved = reserved;
-  page->xblock_size = block_size;
+  page->xblock_size = xblock_size;
   segment->used--;
 
-  // add to the free page list for reuse/reset
+  // add to the reset page list for (delayed) reset
   if (allow_reset) {
     mi_pages_reset_add(segment, page, tld);
   }
-
-  page->capacity = 0;  // after reset there can be zero'd now
-  page->reserved = 0;
 }
 
 void _mi_segment_page_free(mi_page_t* page, bool force, mi_segments_tld_t* tld)
@@ -1038,7 +1045,7 @@ void _mi_segment_page_abandon(mi_page_t* page, mi_segments_tld_t* tld) {
   Reclaim abandoned pages
 ----------------------------------------------------------- */
 
-// Possibly clear pages and check if free space is available
+// Possibly reset pages and check if free space is available
 static bool mi_segment_check_free(mi_segment_t* segment, size_t block_size, bool* all_pages_free)
 {
   mi_assert_internal(block_size < MI_HUGE_BLOCK_SIZE);
@@ -1106,7 +1113,7 @@ static mi_segment_t* mi_segment_reclaim(mi_segment_t* segment, mi_heap_t* heap, 
       _mi_page_free_collect(page, false); // ensure used count is up to date
       if (mi_page_all_free(page)) {
         // if everything free already, clear the page directly
-        mi_segment_page_clear(segment, page, true, tld);  // reset is ok now
+        mi_segment_page_clear(segment, page, true, tld);  // clearing is ok now as we reclaimed it
       }
       else {
         // otherwise reclaim it into the heap
