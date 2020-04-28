@@ -37,17 +37,7 @@ terms of the MIT license. A copy of the license can be found in the file
 ----------------------------------------------------------- */
 bool    _mi_os_decommit(void* addr, size_t size, mi_stats_t* stats);
 
-static void* mi_align_up_ptr(void* p, size_t alignment) {
-  return (void*)_mi_align_up((uintptr_t)p, alignment);
-}
 
-static uintptr_t _mi_align_down(uintptr_t sz, size_t alignment) {
-  return (sz / alignment) * alignment;
-}
-
-static void* mi_align_down_ptr(void* p, size_t alignment) {
-  return (void*)_mi_align_down((uintptr_t)p, alignment);
-}
 
 // page size (initialized properly in `os_init`)
 static size_t os_page_size = 4096;

@@ -250,7 +250,7 @@ static void mi_page_reset(mi_segment_t* segment, mi_page_t* page, size_t size, m
   size_t reset_size = ((size == 0 || size > psize) ? psize : size);
   if (size == 0 && mi_commit_on_demand(segment->page_kind)) {
     mi_assert_internal(page->xblock_size > 0);
-    reset_size = page->capacity * mi_page_block_size(page);
+    reset_size = _mi_align_up( page->capacity * mi_page_block_size(page), _mi_os_page_size() );
   }
   if (reset_size > 0) _mi_mem_reset(start, reset_size, os_tld);
 }
@@ -268,7 +268,7 @@ static void mi_page_unreset(mi_segment_t* segment, mi_page_t* page, size_t size,
   size_t unreset_size = (size == 0 || size > psize ? psize : size);
   if (size == 0 && mi_commit_on_demand(segment->page_kind)) {
     mi_assert_internal(page->xblock_size > 0);
-    unreset_size = page->capacity * mi_page_block_size(page);
+    unreset_size = _mi_align_up( page->capacity * mi_page_block_size(page), _mi_os_page_size() );
   }
   bool is_zero = false;
   if (unreset_size > 0) _mi_mem_unreset(start, unreset_size, &is_zero, os_tld);

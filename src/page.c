@@ -590,8 +590,13 @@ static void mi_page_extend_free(mi_heap_t* heap, mi_page_t* page, mi_tld_t* tld)
 
   // commit on-demand for large and huge pages?
   if (mi_page_commit_on_demand(page)) {
-    uint8_t* start = page_start + (page->capacity * bsize);
-    _mi_mem_commit(start, extend * bsize, NULL, &tld->os);
+    uint8_t* start = (page->capacity == 0 
+                       ? (uint8_t*)mi_align_down_ptr(page_start, _mi_os_page_size())
+                       : (uint8_t*)mi_align_up_ptr( page_start + (page->capacity * bsize), _mi_os_page_size()));
+    uint8_t* end   = (uint8_t*)mi_align_up_ptr( page_start + ((page->capacity + extend) * bsize), _mi_os_page_size());
+    ptrdiff_t  csize = (end - start);
+    // _mi_mem_commit(start, extend * bsize, NULL, &tld->os);
+    if (csize > 0) { _mi_mem_commit(start, csize, NULL, &tld->os); }
   }
 
   // and append the extend the free list
