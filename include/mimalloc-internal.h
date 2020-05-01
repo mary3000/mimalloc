@@ -523,6 +523,7 @@ static inline mi_page_queue_t* mi_page_queue(const mi_heap_t* heap, size_t size)
 }
 
 static inline bool mi_commit_on_demand(mi_page_kind_t pkind) {
+  UNUSED(pkind);
   return (//pkind >= MI_PAGE_MEDIUM && 
           !mi_option_is_enabled(mi_option_eager_page_commit) && 
           !mi_option_is_enabled(mi_option_eager_commit));
