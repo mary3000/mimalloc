@@ -79,9 +79,9 @@ static mi_option_desc_t options[_mi_option_last] =
 #else
   { 1, UNINIT, MI_OPTION(eager_commit_delay) },  // the first N segments per thread are not eagerly committed
 #endif
-  { 100, UNINIT, MI_OPTION(reset_delay) },       // reset delay in milli-seconds
+  { 250, UNINIT, MI_OPTION(reset_delay) },       // reset delay in milli-seconds
   { 0,   UNINIT, MI_OPTION(use_numa_nodes) },    // 0 = use available numa nodes, otherwise use at most N nodes.
-  { 0,   UNINIT, MI_OPTION(eager_page_commit) }, // commit pages eagerly at once?
+  { 1,   UNINIT, MI_OPTION(eager_page_commit) }, // commit pages eagerly at once?
   { 100, UNINIT, MI_OPTION(os_tag) },            // only apple specific for now but might serve more or less related purpose
   { 16,  UNINIT, MI_OPTION(max_errors) }         // maximum errors that are output
 };
