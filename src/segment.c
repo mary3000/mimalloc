@@ -313,7 +313,9 @@ static void mi_pages_reset_add(mi_segment_t* segment, mi_page_t* page, mi_segmen
     // otherwise push on the delayed page reset queue
     mi_page_queue_t* pq = &tld->pages_reset;
     // push on top
-    mi_page_reset_set_expire(page);
+    // if called from reclaim, the expiration is still valid (`page->used > 0`), but we start afresh to give the new thread
+    // an opportunity to use it before being reset
+    mi_page_reset_set_expire(page); 
     page->next = pq->first;
     page->prev = NULL;
     if (pq->first == NULL) {
@@ -1076,6 +1078,7 @@ static bool mi_segment_check_free(mi_segment_t* segment, size_t block_size, mi_m
       // whole empty page
       if (!page->is_reset && mi_page_reset_is_expired(page, now)) {  // reset it now?
         mi_page_reset(segment, page, 0, os_tld);
+        page->used = 0;  // void expiration
       }
       has_page = true;
     }
@@ -1130,8 +1133,10 @@ static mi_segment_t* mi_segment_reclaim(mi_segment_t* segment, mi_heap_t* heap, 
       }
     }
     else if (page->is_committed && !page->is_reset) {  // not in-use, and not reset yet
-      // note: do not reset as this includes pages that were not touched before
-      // mi_pages_reset_add(segment, page, tld);
+      // note: only reset pages with expiration still set (as some pages may not have been touched before)
+      if (page->used != 0) {
+        mi_pages_reset_add(segment, page, tld);
+      }
     }
   }
   mi_assert_internal(segment->abandoned == 0);
