@@ -72,7 +72,50 @@ void*   _mi_arena_alloc_aligned(size_t size, size_t alignment, bool* commit, boo
 #define MI_REGION_MAX_OBJ_BLOCKS  (MI_REGION_MAX_BLOCKS/4)                    // 64MiB
 #define MI_REGION_MAX_OBJ_SIZE    (MI_REGION_MAX_OBJ_BLOCKS*MI_SEGMENT_SIZE)  
 
-// Region info 
+// Region info
+#if defined(GENMC)
+typedef struct mi_region_info_u {
+  uintptr_t value;
+  struct {
+    bool  valid;        // initialized?
+    bool  is_large;     // allocated in fixed large/huge OS pages
+    short numa_node;    // the associated NUMA node (where -1 means no associated node)
+  } x;
+} mi_region_info_t;
+
+mi_region_info_t empty_info = {
+    .value = 0,
+    .x = {
+        0, 0, 0
+    }
+};
+
+const uintptr_t MI_SHORT_BITS = sizeof(short) * 8;
+const uintptr_t MI_VALID = (1 << (MI_SHORT_BITS + 1));
+const uintptr_t MI_IS_LARGE = (1 << (MI_SHORT_BITS));
+const uintptr_t MI_SHORT = ((1 << MI_SHORT_BITS)-1);
+
+void value_from(mi_region_info_t* info) {
+  uintptr_t value = 0;
+  if (info->x.valid) value |= MI_VALID;
+  if (info->x.is_large) value |= MI_IS_LARGE;
+  value |= info->x.numa_node;
+  info->value = value;
+}
+
+void info_from(mi_region_info_t* info) {
+  info->x.valid = 0;
+  info->x.is_large = 0;
+  info->x.numa_node = info->value & MI_SHORT;
+  if (info->value & MI_VALID) {
+    info->x.valid = 1;
+  }
+  if (info->value & MI_IS_LARGE) {
+    info->x.is_large = 1;
+  }
+}
+
+#else
 typedef union mi_region_info_u {
   uintptr_t value;      
   struct {
@@ -81,6 +124,7 @@ typedef union mi_region_info_u {
     short numa_node;    // the associated NUMA node (where -1 means no associated node)
   } x;
 } mi_region_info_t;
+#endif
 
 
 // A region owns a chunk of REGION_SIZE (256MiB) (virtual) memory with
@@ -203,12 +247,15 @@ static bool mi_region_try_alloc_os(size_t blocks, bool commit, bool allow_large,
   mi_bitmap_claim(&r->in_use, 1, blocks, *bit_idx, NULL);
   mi_atomic_store_ptr_release(uint8_t*,&r->start, start);
 
-  // and share it 
+  // and share it
   mi_region_info_t info;
   info.value = 0;                        // initialize the full union to zero
   info.x.valid = true;
   info.x.is_large = region_large;
   info.x.numa_node = (short)_mi_os_numa_node(tld);
+#if defined(GENMC)
+  value_from(&info);
+#endif
   mi_atomic_store_release(&r->info, info.value); // now make it available to others
   *region = r;
   return true;
@@ -222,6 +269,9 @@ static bool mi_region_is_suitable(const mem_region_t* region, int numa_node, boo
   // initialized at all?
   mi_region_info_t info;
   info.value = mi_atomic_load_relaxed(&((mem_region_t*)region)->info);
+#if defined(GENMC)
+  info_from(&info);
+#endif
   if (info.value==0) return false;
 
   // numa correct
@@ -281,6 +331,9 @@ static void* mi_region_try_alloc(size_t blocks, bool* commit, bool* is_large, bo
 
   mi_region_info_t info;
   info.value = mi_atomic_load_acquire(&region->info);
+#if defined(GENMC)
+  info_from(&info);
+#endif
   uint8_t* start = (uint8_t*)mi_atomic_load_ptr_acquire(uint8_t,&region->start);
   mi_assert_internal(!(info.x.is_large && !*is_large));
   mi_assert_internal(start != NULL);
@@ -401,6 +454,9 @@ void _mi_mem_free(void* p, size_t size, size_t id, bool full_commit, bool any_re
     mi_assert_internal(blocks + bit_idx <= MI_BITMAP_FIELD_BITS);
     mi_region_info_t info;
     info.value = mi_atomic_load_acquire(&region->info);
+#if defined(GENMC)
+    info_from(&info);
+#endif
     mi_assert_internal(info.value != 0);
     void* blocks_start = mi_region_blocks_start(region, bit_idx);
     mi_assert_internal(blocks_start == p); // not a pointer in our area?

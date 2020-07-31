@@ -99,10 +99,17 @@ terms of the MIT license. A copy of the license can be found in the file
 
 // Main tuning parameters for segment and page sizes
 // Sizes for 64-bit, divide by two for 32-bit
+#if defined(GENMC)
+#define MI_SMALL_PAGE_SHIFT               (10 + MI_INTPTR_SHIFT)
+#define MI_MEDIUM_PAGE_SHIFT              ( 2 + MI_SMALL_PAGE_SHIFT)
+#define MI_LARGE_PAGE_SHIFT               ( 2 + MI_MEDIUM_PAGE_SHIFT)
+#define MI_SEGMENT_SHIFT                  ( MI_LARGE_PAGE_SHIFT)
+#else
 #define MI_SMALL_PAGE_SHIFT               (13 + MI_INTPTR_SHIFT)      // 64kb
 #define MI_MEDIUM_PAGE_SHIFT              ( 3 + MI_SMALL_PAGE_SHIFT)  // 512kb
 #define MI_LARGE_PAGE_SHIFT               ( 3 + MI_MEDIUM_PAGE_SHIFT) // 4mb
 #define MI_SEGMENT_SHIFT                  ( MI_LARGE_PAGE_SHIFT)      // 4mb
+#endif
 
 // Derived constants
 #define MI_SEGMENT_SIZE                   (1UL<<MI_SEGMENT_SHIFT)
@@ -155,7 +162,14 @@ typedef enum mi_delayed_e {
 
 // The `in_full` and `has_aligned` page flags are put in a union to efficiently
 // test if both are false (`full_aligned == 0`) in the `mi_free` routine.
-#if !MI_TSAN
+#if defined(GENMC)
+typedef struct mi_page_flags_s {
+  struct {
+    uint8_t in_full;
+    uint8_t has_aligned;
+  } x;
+} mi_page_flags_t;
+#elif !MI_TSAN
 typedef union mi_page_flags_s {
   uint8_t full_aligned;
   struct {

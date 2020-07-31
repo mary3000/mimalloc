@@ -212,7 +212,14 @@ static bool mi_os_mem_free(void* addr, size_t size, bool was_committed, mi_stats
 {
   if (addr == NULL || size == 0) return true; // || _mi_os_is_huge_reserved(addr)
   bool err = false;
-#if defined(_WIN32)
+#if defined(GENMC)
+  printf("free(): %p\n", addr);
+  uintptr_t* prev_p = (uintptr_t*)addr - 1;
+  char* malloc_addr = (char*)*prev_p;
+  //printf("free() %p - %p\n", malloc_addr, malloc_addr + size);
+  free(malloc_addr);
+  printf("free() done\n");
+#elif defined(_WIN32)
   err = (VirtualFree(addr, 0, MEM_RELEASE) == 0);
 #elif defined(__wasi__)
   err = 0; // WebAssembly's heap cannot be shrunk
@@ -314,6 +321,27 @@ static void* mi_wasm_heap_grow(size_t size, size_t try_alignment) {
 #define MI_OS_USE_MMAP
 static void* mi_unix_mmapx(void* addr, size_t size, size_t try_alignment, int protect_flags, int flags, int fd) {
   void* p = NULL;
+#if defined(GENMC)
+  printf("malloc() begin: %zu\n", size);
+  printf("align: %zx\n", try_alignment);
+
+  size_t final_size = size + try_alignment + sizeof(uintptr_t);
+    p = malloc(final_size);
+        printf("malloc() end: %p - %p\n", p, p + final_size);
+
+      char* final_p = (char*)p + sizeof(uintptr_t);
+
+      if (try_alignment != 0) {
+          size_t adjust = (size_t)final_p % try_alignment;
+          if (adjust != 0) {
+              final_p += try_alignment - adjust;
+          }
+      }
+      char* prev_p = final_p - sizeof(uintptr_t);
+      *(uintptr_t*)prev_p = (uintptr_t) p;
+    printf("malloc() final end: %p - %p\n", final_p, final_p + size);
+    p = final_p;
+#else
   #if (MI_INTPTR_SIZE >= 8) && !defined(MAP_ALIGNED)
   // on 64-bit systems, use the virtual address area after 4TiB for 4MiB aligned allocations
   void* hint;
@@ -329,6 +357,7 @@ static void* mi_unix_mmapx(void* addr, size_t size, size_t try_alignment, int pr
     p = mmap(addr,size,protect_flags,flags,fd,0);
     if (p==MAP_FAILED) p = NULL;
   }
+#endif
   return p;
 }
 
@@ -665,6 +694,9 @@ static void mi_mprotect_hint(int err) {
 // Usually commit is aligned liberal, while decommit is aligned conservative.
 // (but not for the reset version where we want commit to be conservative as well)
 static bool mi_os_commitx(void* addr, size_t size, bool commit, bool conservative, bool* is_zero, mi_stats_t* stats) {
+#if defined(GENMC)
+  return true;
+#endif
   // page align in the range, commit liberally, decommit conservative
   if (is_zero != NULL) { *is_zero = false; }
   size_t csize;

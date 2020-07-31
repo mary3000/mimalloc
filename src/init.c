@@ -453,7 +453,9 @@ static void mi_process_load(void) {
   UNUSED(dummy);
   #endif
   os_preloading = false;
+#if !defined(GENMC)
   atexit(&mi_process_done);
+#endif
   _mi_options_init();
   mi_process_init();
   //mi_stats_reset();-
@@ -516,8 +518,8 @@ static void mi_process_done(void) {
 }
 
 
-
-#if defined(_WIN32) && defined(MI_SHARED_LIB)
+#if defined(GENMC)
+#elif defined(_WIN32) && defined(MI_SHARED_LIB)
   // Windows DLL: easy to hook into process_init and thread_done
   __declspec(dllexport) BOOL WINAPI DllMain(HINSTANCE inst, DWORD reason, LPVOID reserved) {
     UNUSED(reserved);

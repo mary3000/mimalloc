@@ -326,8 +326,12 @@ void _mi_warning_message(const char* fmt, ...) {
   va_end(args);
 }
 
-
-#if MI_DEBUG
+#if defined(GENMC)
+void _mi_assert_fail(const char* assertion, const char* fname, unsigned line, const char* func ) {
+  printf("mimalloc: assertion failed: at \"%s\":%u, %s\n  assertion: \"%s\"\n", fname, line, (func==NULL?"":func), assertion);
+  assert(0);
+}
+#elif MI_DEBUG
 void _mi_assert_fail(const char* assertion, const char* fname, unsigned line, const char* func ) {
   _mi_fprintf(NULL, NULL, "mimalloc: assertion failed: at \"%s\":%u, %s\n  assertion: \"%s\"\n", fname, line, (func==NULL?"":func), assertion);
   abort();
@@ -425,7 +429,11 @@ static bool mi_getenv(const char* name, char* result, size_t result_size) {
 #if defined(__APPLE__)
 #include <crt_externs.h>
 static char** mi_get_environ(void) {
+#if defined(GENMC)
+  return NULL;
+#else
   return (*_NSGetEnviron());
+#endif
 }
 #else 
 extern char** environ;

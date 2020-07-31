@@ -439,7 +439,11 @@ void mi_free(void* p) mi_attr_noexcept
   }
 #endif
 
+#if defined(GENMC)
+  if (mi_likely(tid == segment->thread_id && page->flags.x.in_full == 0 && page->flags.x.has_aligned == 0)) {  // the thread id matches and it is not a full page, nor has aligned blocks
+#else
   if (mi_likely(tid == segment->thread_id && page->flags.full_aligned == 0)) {  // the thread id matches and it is not a full page, nor has aligned blocks
+#endif
     // local, and not full or aligned
     if (mi_unlikely(mi_check_is_double_free(page,block))) return;
     mi_check_padding(page, block);
