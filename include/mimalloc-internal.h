@@ -740,7 +740,11 @@ static inline uintptr_t _mi_thread_id(void) mi_attr_noexcept {
 #else
 // otherwise use standard C
 static inline uintptr_t _mi_thread_id(void) mi_attr_noexcept {
+#if defined(GENMC)
+  return (uintptr_t)pthread_self();
+#else
   return (uintptr_t)&_mi_heap_default;
+#endif
 }
 #endif
 

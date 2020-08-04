@@ -428,3 +428,18 @@ template<class T1,class T2> bool operator!=(const mi_stl_allocator<T1>& , const 
 #endif // __cplusplus
 
 #endif
+
+#if defined(GENMC)
+
+void *genmc_memset(void *b, int c, size_t len);
+void *genmc_memcpy(void *dst, const void *src, size_t n);
+
+#define GENMC_LOG 1
+
+#if defined(GENMC_LOG)
+#define genmc_log(...) printf(__VA_ARGS__)
+#else
+#define genmc_log(...)
+#endif
+
+#endif

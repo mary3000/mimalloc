@@ -244,6 +244,7 @@ static mi_page_t* mi_page_fresh_alloc(mi_heap_t* heap, mi_page_queue_t* pq, size
   mi_assert_internal(pq==NULL||mi_heap_contains_queue(heap, pq));
   mi_assert_internal(pq==NULL||block_size == pq->block_size);
   mi_page_t* page = _mi_segment_page_alloc(heap, block_size, &heap->tld->segments, &heap->tld->os);
+  genmc_log("mi_page_fresh_alloc after\n");
   if (page == NULL) {
     // this may be out-of-memory, or an abandoned page was reclaimed (and in our queue)
     return NULL;
@@ -254,6 +255,7 @@ static mi_page_t* mi_page_fresh_alloc(mi_heap_t* heap, mi_page_queue_t* pq, size
   _mi_stat_increase(&heap->tld->stats.pages, 1);
   if (pq!=NULL) mi_page_queue_push(heap, pq, page); // huge pages use pq==NULL
   mi_assert_expensive(_mi_page_is_valid(page));
+  genmc_log("mi_page_fresh_alloc end\n");
   return page;
 }
 

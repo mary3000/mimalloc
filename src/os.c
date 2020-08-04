@@ -42,6 +42,19 @@ terms of the MIT license. A copy of the license can be found in the file
 #endif
 #endif
 
+#if defined(GENMC)
+void *genmc_memset(void *b, int c, size_t len) {
+  genmc_log("genmc_memset\n");
+  return NULL;
+}
+void *genmc_memcpy(void *dst, const void *src, size_t n) {
+  genmc_log("genmc_memcpy\n");
+  memcpy(dst, src, n);
+  return NULL;
+}
+#else
+#endif
+
 /* -----------------------------------------------------------
   Initialization.
   On windows initializes support for aligned allocation and
@@ -775,7 +788,8 @@ static bool mi_os_resetx(void* addr, size_t size, bool reset, mi_stats_t* stats)
 
   #if (MI_DEBUG>1)
   if (MI_SECURE==0) {
-    memset(start, 0, csize); // pretend it is eagerly reset
+    genmc_log("mi_os_resetx\n");
+    genmc_memset(start, 0, csize); // pretend it is eagerly reset
   }
   #endif
 

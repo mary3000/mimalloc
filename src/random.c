@@ -90,6 +90,9 @@ static uint32_t chacha_next32(mi_random_ctx_t* ctx) {
 }
 
 static inline uint32_t read32(const uint8_t* p, size_t idx32) {
+#if defined(GENMC)
+  return 42;
+#endif
   const size_t i = 4*idx32;
   return ((uint32_t)p[i+0] | (uint32_t)p[i+1] << 8 | (uint32_t)p[i+2] << 16 | (uint32_t)p[i+3] << 24);
 }
@@ -99,7 +102,7 @@ static void chacha_init(mi_random_ctx_t* ctx, const uint8_t key[32], uint64_t no
   // since we only use chacha for randomness (and not encryption) we
   // do not _need_ to read 32-bit values as little endian but we do anyways
   // just for being compatible :-)
-  memset(ctx, 0, sizeof(*ctx));
+  genmc_memset(ctx, 0, sizeof(*ctx));
   for (size_t i = 0; i < 4; i++) {
     const uint8_t* sigma = (uint8_t*)"expand 32-byte k";
     ctx->input[i] = read32(sigma,i);
@@ -114,8 +117,8 @@ static void chacha_init(mi_random_ctx_t* ctx, const uint8_t key[32], uint64_t no
 }
 
 static void chacha_split(mi_random_ctx_t* ctx, uint64_t nonce, mi_random_ctx_t* ctx_new) {
-  memset(ctx_new, 0, sizeof(*ctx_new));
-  memcpy(ctx_new->input, ctx->input, sizeof(ctx_new->input));
+  genmc_memset(ctx_new, 0, sizeof(*ctx_new));
+  genmc_memcpy(ctx_new->input, ctx->input, sizeof(ctx_new->input));
   ctx_new->input[12] = 0;
   ctx_new->input[13] = 0;
   ctx_new->input[14] = (uint32_t)nonce;
@@ -180,7 +183,7 @@ BOOLEAN NTAPI RtlGenRandom(PVOID RandomBuffer, ULONG RandomBufferLength);
 #endif
 static bool os_random_buf(void* buf, size_t buf_len) {
   mi_assert_internal(buf_len >= sizeof(uintptr_t));
-  memset(buf, 0, buf_len);
+  genmc_memset(buf, 0, buf_len);
   RtlGenRandom(buf, (ULONG)buf_len);
   return (((uintptr_t*)buf)[0] != 0);  // sanity check (but RtlGenRandom should never fail)
 }

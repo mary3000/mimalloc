@@ -168,6 +168,7 @@ typedef struct mi_thread_data_s {
 static bool _mi_heap_init(void) {
   if (mi_heap_is_initialized(mi_get_default_heap())) return true;
   if (_mi_is_main_thread()) {
+    genmc_log("thread: %d is main thread\n", pthread_self());
     // mi_assert_internal(_mi_heap_main.thread_id != 0);  // can happen on freeBSD where alloc is called before any initialization
     // the main heap is statically allocated
     mi_heap_main_init();
@@ -175,6 +176,7 @@ static bool _mi_heap_init(void) {
     //mi_assert_internal(_mi_heap_default->tld->heap_backing == mi_get_default_heap());
   }
   else {
+    genmc_log("thread: %d is non-main thread\n", pthread_self());
     // use `_mi_os_alloc` to allocate directly from the OS
     mi_thread_data_t* td = (mi_thread_data_t*)_mi_os_alloc(sizeof(mi_thread_data_t), &_mi_stats_main); // Todo: more efficient allocation?
     if (td == NULL) {
@@ -189,7 +191,11 @@ static bool _mi_heap_init(void) {
     // OS allocated so already zero initialized
     mi_tld_t*  tld = &td->tld;
     mi_heap_t* heap = &td->heap;
+#if defined(GENMC)
+    *heap = _mi_heap_empty;
+#else
     memcpy(heap, &_mi_heap_empty, sizeof(*heap));
+#endif
     heap->thread_id = _mi_thread_id();
     _mi_random_init(&heap->random);
     heap->cookie  = _mi_heap_random_next(heap) | 1;
@@ -320,7 +326,7 @@ static void mi_process_setup_auto_thread_done(void) {
     // nothing to do as it is done in DllMain
   #elif defined(_WIN32) && !defined(MI_SHARED_LIB)
     mi_fls_key = FlsAlloc(&mi_fls_done);
-  #elif defined(MI_USE_PTHREADS)
+  #elif defined(MI_USE_PTHREADS) && !defined(GENMC)
     mi_assert_internal(_mi_heap_default_key == (pthread_key_t)(-1));
     pthread_key_create(&_mi_heap_default_key, &mi_pthread_done);
   #endif
@@ -329,7 +335,11 @@ static void mi_process_setup_auto_thread_done(void) {
 
 
 bool _mi_is_main_thread(void) {
+#if defined(GENMC)
+  return pthread_self() == 0;
+#else
   return (_mi_heap_main.thread_id==0 || _mi_heap_main.thread_id == _mi_thread_id());
+#endif
 }
 
 // This is called from the `mi_malloc_generic`
@@ -338,10 +348,12 @@ void mi_thread_init(void) mi_attr_noexcept
   // ensure our process has started already
   mi_process_init();
 
+  genmc_log("thread: %d, heap: %p\n", pthread_self(), mi_get_default_heap());
   // initialize the thread local default heap
   // (this will call `_mi_heap_set_default_direct` and thus set the
   //  fiber/pthread key to a non-zero value, ensuring `_mi_thread_done` is called)
   if (_mi_heap_init()) return;  // returns true if already initialized
+  genmc_log("thread: %d, heap: %p\n", pthread_self(), mi_get_default_heap());
 
   // don't further initialize for the main thread
   if (_mi_is_main_thread()) return;
@@ -380,6 +392,10 @@ void _mi_heap_set_default_direct(mi_heap_t* heap)  {
   #else
   _mi_heap_default = heap;
   #endif
+
+#if defined(GENMC)
+  return;
+#endif
 
   // ensure the default heap is passed to `_mi_thread_done`
   // setting to a non-NULL value also ensures `mi_thread_done` is called.
@@ -519,6 +535,7 @@ static void mi_process_done(void) {
 
 
 #if defined(GENMC)
+// invoke mi_process_load manually
 #elif defined(_WIN32) && defined(MI_SHARED_LIB)
   // Windows DLL: easy to hook into process_init and thread_done
   __declspec(dllexport) BOOL WINAPI DllMain(HINSTANCE inst, DWORD reason, LPVOID reserved) {

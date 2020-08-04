@@ -10,6 +10,7 @@ terms of the MIT license. A copy of the license can be found in the file
 #include "mimalloc-atomic.h"
 
 #include <string.h>  // memset, memcpy
+//#define genmc_memset(...) mi_assert_internal(0 != 0)
 
 
 /* -----------------------------------------------------------
@@ -193,7 +194,7 @@ mi_heap_t* mi_heap_new(void) {
   mi_heap_t* bheap = mi_heap_get_backing();
   mi_heap_t* heap = mi_heap_malloc_tp(bheap, mi_heap_t);  // todo: OS allocate in secure mode?
   if (heap==NULL) return NULL;
-  memcpy(heap, &_mi_heap_empty, sizeof(mi_heap_t));
+  genmc_memcpy(heap, &_mi_heap_empty, sizeof(mi_heap_t));
   heap->tld = bheap->tld;
   heap->thread_id = _mi_thread_id();
   _mi_random_split(&bheap->random, &heap->random);
@@ -215,11 +216,11 @@ uintptr_t _mi_heap_random_next(mi_heap_t* heap) {
 static void mi_heap_reset_pages(mi_heap_t* heap) {
   mi_assert_internal(mi_heap_is_initialized(heap));
   // TODO: copy full empty heap instead?
-  memset(&heap->pages_free_direct, 0, sizeof(heap->pages_free_direct));
+  genmc_memset(&heap->pages_free_direct, 0, sizeof(heap->pages_free_direct));
 #ifdef MI_MEDIUM_DIRECT
-  memset(&heap->pages_free_medium, 0, sizeof(heap->pages_free_medium));
+  genmc_memset(&heap->pages_free_medium, 0, sizeof(heap->pages_free_medium));
 #endif
-  memcpy(&heap->pages, &_mi_heap_empty.pages, sizeof(heap->pages));
+  genmc_memcpy(&heap->pages, &_mi_heap_empty.pages, sizeof(heap->pages));
   heap->thread_delayed_free = NULL;
   heap->page_count = 0;
 }
@@ -474,7 +475,7 @@ static bool mi_heap_area_visit_blocks(const mi_heap_area_ex_t* xarea, mi_block_v
   // create a bitmap of free blocks.
   #define MI_MAX_BLOCKS   (MI_SMALL_PAGE_SIZE / sizeof(void*))
   uintptr_t free_map[MI_MAX_BLOCKS / sizeof(uintptr_t)];
-  memset(free_map, 0, sizeof(free_map));
+  genmc_memset(free_map, 0, sizeof(free_map));
 
   size_t free_count = 0;
   for (mi_block_t* block = page->free; block != NULL; block = mi_block_next(page,block)) {

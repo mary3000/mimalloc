@@ -340,6 +340,9 @@ static void mi_pages_reset_remove_all_in_segment(mi_segment_t* segment, bool for
 }
 
 static void mi_reset_delayed(mi_segments_tld_t* tld) {
+#if defined(GENMC)
+  return; // _mi_clock_now doesn't work?
+#endif
   if (!mi_option_is_enabled(mi_option_page_reset)) return;
   mi_msecs_t now = _mi_clock_now();
   mi_page_queue_t* pq = &tld->pages_reset;
@@ -639,7 +642,8 @@ static mi_segment_t* mi_segment_init(mi_segment_t* segment, size_t required, mi_
   if (!pages_still_good) {
     // zero the segment info (but not the `mem` fields)
     ptrdiff_t ofs = offsetof(mi_segment_t, next);
-    memset((uint8_t*)segment + ofs, 0, info_size - ofs);
+    genmc_log("mi_segment_init memset...\n");
+    genmc_memset((uint8_t*)segment + ofs, 0, info_size - ofs);
 
     // initialize pages info
     for (uint8_t i = 0; i < capacity; i++) {
@@ -650,9 +654,10 @@ static mi_segment_t* mi_segment_init(mi_segment_t* segment, size_t required, mi_
     }
   }
   else {
+    genmc_log("mi_segment_init memset 2...\n");
     // zero the segment info but not the pages info (and mem fields)
     ptrdiff_t ofs = offsetof(mi_segment_t, next);
-    memset((uint8_t*)segment + ofs, 0, offsetof(mi_segment_t,pages) - ofs);
+    genmc_memset((uint8_t*)segment + ofs, 0, offsetof(mi_segment_t,pages) - ofs);
   }
 
   // initialize
@@ -674,6 +679,7 @@ static mi_segment_t* mi_segment_init(mi_segment_t* segment, size_t required, mi_
   }
 
   //fprintf(stderr,"mimalloc: alloc segment at %p\n", (void*)segment);
+  genmc_log("mi_segment_init end\n");
   return segment;
 }
 
@@ -790,7 +796,7 @@ static void mi_segment_page_clear(mi_segment_t* segment, mi_page_t* page, bool a
   uint16_t capacity = page->capacity;
   uint16_t reserved = page->reserved;
   ptrdiff_t ofs = offsetof(mi_page_t,capacity);
-  memset((uint8_t*)page + ofs, 0, sizeof(*page) - ofs);
+  genmc_memset((uint8_t*)page + ofs, 0, sizeof(*page) - ofs);
   page->capacity = capacity;
   page->reserved = reserved;
   page->xblock_size = block_size;
@@ -1237,6 +1243,7 @@ static mi_page_t* mi_segment_page_alloc(mi_heap_t* heap, size_t block_size, mi_p
   if (mi_segment_queue_is_empty(free_queue)) {
     // possibly allocate or reclaim a fresh segment
     mi_segment_t* const segment = mi_segment_reclaim_or_alloc(heap, block_size, kind, page_shift, tld, os_tld);
+    genmc_log("mi_segment_page_alloc after\n");
     if (segment == NULL) return NULL;  // return NULL if out-of-memory (or reclaimed)
     mi_assert_internal(free_queue->first == segment);
     mi_assert_internal(segment->page_kind==kind);
@@ -1249,6 +1256,7 @@ static mi_page_t* mi_segment_page_alloc(mi_heap_t* heap, size_t block_size, mi_p
   // verify it is committed
   _mi_segment_page_start(_mi_page_segment(page), page, sizeof(void*), NULL, NULL)[0] = 0;
 #endif
+  genmc_log("mi_segment_page_alloc end\n");
   return page;
 }
 
@@ -1340,9 +1348,11 @@ mi_page_t* _mi_segment_page_alloc(mi_heap_t* heap, size_t block_size, mi_segment
   else {
     page = mi_segment_huge_page_alloc(block_size,tld,os_tld);
   }
+  genmc_log("_mi_segment_page_alloc after\n");
   mi_assert_expensive(page == NULL || mi_segment_is_valid(_mi_page_segment(page),tld));
   mi_assert_internal(page == NULL || (mi_segment_page_size(_mi_page_segment(page)) - (MI_SECURE == 0 ? 0 : _mi_os_page_size())) >= block_size);
   mi_reset_delayed(tld);
   mi_assert_internal(page == NULL || mi_page_not_in_queue(page, tld));
+  genmc_log("_mi_segment_page_alloc end\n");
   return page;
 }

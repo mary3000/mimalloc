@@ -227,6 +227,8 @@ static bool mi_region_try_alloc_os(size_t blocks, bool commit, bool allow_large,
   mi_assert_internal(!(region_large && !allow_large));
   mi_assert_internal(!region_large || region_commit);
 
+  genmc_log("mi_region_try_alloc_os after\n");
+
   // claim a fresh slot
   const uintptr_t idx = mi_atomic_increment_acq_rel(&regions_count);
   if (idx >= MI_REGION_MAX) {
@@ -258,6 +260,7 @@ static bool mi_region_try_alloc_os(size_t blocks, bool commit, bool allow_large,
 #endif
   mi_atomic_store_release(&r->info, info.value); // now make it available to others
   *region = r;
+  genmc_log("mi_region_try_alloc_os end\n");
   return true;
 }
 
@@ -323,7 +326,9 @@ static void* mi_region_try_alloc(size_t blocks, bool* commit, bool* is_large, bo
       return NULL;
     }
   }
-  
+
+  genmc_log("mi_region_try_alloc after\n");
+
   // ------------------------------------------------
   // found a region and claimed `blocks` at `bit_idx`, initialize them now
   mi_assert_internal(region != NULL);
@@ -380,7 +385,8 @@ static void* mi_region_try_alloc(size_t blocks, bool* commit, bool* is_large, bo
   #endif
   
   // and return the allocation  
-  mi_assert_internal(p != NULL);  
+  mi_assert_internal(p != NULL);
+  genmc_log("mi_region_try_alloc end\n");
   return p;
 }
 
@@ -406,6 +412,7 @@ void* _mi_mem_alloc_aligned(size_t size, size_t alignment, bool* commit, bool* l
   void* p = NULL;
   size_t arena_memid;
   const size_t blocks = mi_region_block_count(size);
+  genmc_log("_mi_mem_alloc_aligned\n");
   if (blocks <= MI_REGION_MAX_OBJ_BLOCKS && alignment <= MI_SEGMENT_ALIGN) {
     p = mi_region_try_alloc(blocks, commit, large, is_zero, memid, tld);    
     if (p == NULL) {
@@ -510,7 +517,7 @@ void _mi_mem_collect(mi_os_tld_t* tld) {
         uint8_t* start = (uint8_t*)mi_atomic_load_ptr_acquire(uint8_t,&regions[i].start);
         size_t arena_memid = mi_atomic_load_relaxed(&regions[i].arena_memid);
         uintptr_t commit = mi_atomic_load_relaxed(&regions[i].commit);
-        memset(&regions[i], 0, sizeof(mem_region_t));
+        genmc_memset(&regions[i], 0, sizeof(mem_region_t));
         // and release the whole region
         mi_atomic_store_release(&region->info, 0);
         if (start != NULL) { // && !_mi_os_is_huge_reserved(start)) {         

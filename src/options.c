@@ -48,6 +48,44 @@ typedef struct mi_option_desc_s {
 #define MI_OPTION(opt)        mi_option_##opt, #opt
 #define MI_OPTION_DESC(opt)   {0, UNINIT, MI_OPTION(opt) }
 
+#if defined(GENMC)
+static mi_option_desc_t options[_mi_option_last] =
+{
+  // stable options
+#if MI_DEBUG || defined(MI_SHOW_ERRORS)
+  { 1, DEFAULTED, MI_OPTION(show_errors) },
+#else
+  { 0, DEFAULTED, MI_OPTION(show_errors) },
+#endif
+  { 0, DEFAULTED, MI_OPTION(show_stats) },
+  { 0, DEFAULTED, MI_OPTION(verbose) },
+
+  // the following options are experimental and not all combinations make sense.
+  { 1, DEFAULTED, MI_OPTION(eager_commit) },        // commit on demand
+  #if defined(_WIN32) || (MI_INTPTR_SIZE <= 4)   // and other OS's without overcommit?
+  { 0, DEFAULTED, MI_OPTION(eager_region_commit) },
+  { 1, DEFAULTED, MI_OPTION(reset_decommits) },     // reset decommits memory
+  #else
+  { 1, DEFAULTED, MI_OPTION(eager_region_commit) },
+  { 0, DEFAULTED, MI_OPTION(reset_decommits) },     // reset uses MADV_FREE/MADV_DONTNEED
+  #endif
+  { 0, DEFAULTED, MI_OPTION(large_os_pages) },      // use large OS pages, use only with eager commit to prevent fragmentation of VMA's
+  { 0, DEFAULTED, MI_OPTION(reserve_huge_os_pages) },
+  { 0, DEFAULTED, MI_OPTION(segment_cache) },       // cache N segments per thread
+  { 1, DEFAULTED, MI_OPTION(page_reset) },          // reset page memory on free
+  { 0, DEFAULTED, MI_OPTION(abandoned_page_reset) },// reset free page memory when a thread terminates
+  { 0, DEFAULTED, MI_OPTION(segment_reset) },       // reset segment memory on free (needs eager commit)
+#if defined(__NetBSD__)
+  { 0, DEFAULTED, MI_OPTION(eager_commit_delay) },  // the first N segments per thread are not eagerly committed
+#else
+  { 1, DEFAULTED, MI_OPTION(eager_commit_delay) },  // the first N segments per thread are not eagerly committed
+#endif
+  { 100, DEFAULTED, MI_OPTION(reset_delay) },       // reset delay in milli-seconds
+  { 0,   DEFAULTED, MI_OPTION(use_numa_nodes) },    // 0 = use available numa nodes, otherwise use at most N nodes.
+  { 100, DEFAULTED, MI_OPTION(os_tag) },            // only apple specific for now but might serve more or less related purpose
+  { 16,  DEFAULTED, MI_OPTION(max_errors) }         // maximum errors that are output
+};
+#else
 static mi_option_desc_t options[_mi_option_last] =
 {
   // stable options
@@ -84,6 +122,7 @@ static mi_option_desc_t options[_mi_option_last] =
   { 100, UNINIT, MI_OPTION(os_tag) },            // only apple specific for now but might serve more or less related purpose
   { 16,  UNINIT, MI_OPTION(max_errors) }         // maximum errors that are output
 };
+#endif
 
 static void mi_option_init(mi_option_desc_t* desc);
 
@@ -105,7 +144,9 @@ void _mi_options_init(void) {
 long mi_option_get(mi_option_t option) {
   mi_assert(option >= 0 && option < _mi_option_last);
   mi_option_desc_t* desc = &options[option];
+#if !defined(GENMC)
   mi_assert(desc->option == option);  // index should match the option
+#endif
   if (mi_unlikely(desc->init == UNINIT)) {
     mi_option_init(desc);
   }
@@ -183,7 +224,7 @@ static void mi_out_buf(const char* msg, void* arg) {
   if (start+n >= MI_MAX_DELAY_OUTPUT) {
     n = MI_MAX_DELAY_OUTPUT-start-1;
   }
-  memcpy(&out_buf[start], msg, n);
+  genmc_memcpy(&out_buf[start], msg, n);
 }
 
 static void mi_out_buf_flush(mi_output_fun* out, bool no_more_buf, void* arg) {
