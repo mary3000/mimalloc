@@ -8,6 +8,10 @@ terms of the MIT license. A copy of the license can be found in the file
 #ifndef MIMALLOC_INTERNAL_H
 #define MIMALLOC_INTERNAL_H
 
+#if defined(GENMC)
+#include <pthread.h>
+#endif
+
 #include "mimalloc-types.h"
 
 #if (MI_DEBUG>0)

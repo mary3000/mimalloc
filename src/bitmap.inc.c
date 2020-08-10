@@ -165,6 +165,7 @@ static inline bool mi_bitmap_try_find_claim_field(mi_bitmap_t bitmap, size_t idx
       else {
         // success, we claimed the bits!
         *bitmap_idx = mi_bitmap_index_create(idx, bitidx);
+        genmc_log("t %d, addr = %p, exp = %d, des = %d, count = %d, bitmap_idx = %d\n", pthread_self(), &bitmap[idx], map, newmap, count, *bitmap_idx);
         return true;
       }
     }
@@ -230,6 +231,7 @@ static inline bool mi_bitmap_is_claimedx(mi_bitmap_t bitmap, size_t bitmap_field
   mi_assert_internal(bitmap_fields > idx); UNUSED(bitmap_fields);
   uintptr_t field = mi_atomic_load_relaxed(&bitmap[idx]);
   if (any_ones != NULL) *any_ones = ((field & mask) != 0);
+  genmc_log("t %d, addr = %p, field = %d, bitmap_idx = %d, count = %d, mask = %d\n", pthread_self(), &bitmap[idx], field, bitmap_idx, count, mask);
   return ((field & mask) == mask);
 }
 

@@ -124,7 +124,8 @@ bool _mi_page_is_valid(mi_page_t* page) {
 void _mi_page_use_delayed_free(mi_page_t* page, mi_delayed_t delay, bool override_never) {
   mi_thread_free_t tfreex;
   mi_delayed_t     old_delay;
-  mi_thread_free_t tfree;  
+  mi_thread_free_t tfree;
+  genmc_log("_mi_page_use_delayed_free delay = %d\n", delay);
   do {
     tfree = mi_atomic_load_acquire(&page->xthread_free); // note: must acquire as we can break/repeat this loop and not do a CAS;
     tfreex = mi_tf_set_delayed(tfree, delay);

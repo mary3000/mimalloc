@@ -263,6 +263,10 @@ typedef enum mi_page_kind_e {
   MI_PAGE_HUGE      // huge blocks (>512kb) are put into a single page in a segment of the exact size (but still 2mb aligned)
 } mi_page_kind_t;
 
+#if defined(GENMC)
+#define PAGES_NUM 64
+#endif
+
 // Segments are large allocated memory blocks (2mb on 64 bit) from
 // the OS. Inside segments we allocated fixed size _pages_ that
 // contain blocks.
@@ -290,7 +294,11 @@ typedef struct mi_segment_s {
   size_t               page_shift;       // `1 << page_shift` == the page sizes == `page->block_size * page->reserved` (unless the first page, then `-segment_info_size`).
   _Atomic(uintptr_t)   thread_id;        // unique id of the thread owning this segment
   mi_page_kind_t       page_kind;        // kind of pages: small, large, or huge
+#if defined(GENMC)
+  mi_page_t            pages[PAGES_NUM];
+#else
   mi_page_t            pages[1];         // up to `MI_SMALL_PAGES_PER_SEGMENT` pages
+#endif
 } mi_segment_t;
 
 

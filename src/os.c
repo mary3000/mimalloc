@@ -49,7 +49,7 @@ void *genmc_memset(void *b, int c, size_t len) {
 }
 void *genmc_memcpy(void *dst, const void *src, size_t n) {
   genmc_log("genmc_memcpy\n");
-  memcpy(dst, src, n);
+  //memcpy(dst, src, n);
   return NULL;
 }
 #else
@@ -1169,7 +1169,11 @@ static size_t mi_os_numa_node_countx(void) {
 }
 #endif
 
+#if defined(GENMC)
+size_t _mi_numa_node_count = 1;   // hide data race
+#else
 size_t _mi_numa_node_count = 0;   // cache the node count
+#endif
 
 size_t _mi_os_numa_node_count_get(void) {
   if (mi_unlikely(_mi_numa_node_count <= 0)) {

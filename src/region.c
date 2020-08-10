@@ -320,6 +320,7 @@ static void* mi_region_try_alloc(size_t blocks, bool* commit, bool* is_large, bo
   const int numa_node = (_mi_os_numa_node_count() <= 1 ? -1 : _mi_os_numa_node(tld));
   // try to claim in existing regions
   if (!mi_region_try_claim(numa_node, blocks, *is_large, &region, &bit_idx, tld)) {
+    genmc_log("mi_region_try_alloc failed to claim\n");
     // otherwise try to allocate a fresh region and claim in there
     if (!mi_region_try_alloc_os(blocks, *commit, *is_large, &region, &bit_idx, tld)) {
       // out of regions or memory

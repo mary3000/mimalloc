@@ -419,6 +419,8 @@ uint8_t* _mi_segment_page_start(const mi_segment_t* segment, const mi_page_t* pa
 
 static size_t mi_segment_size(size_t capacity, size_t required, size_t* pre_size, size_t* info_size)
 {
+  assert(capacity > PAGES_NUM);
+  capacity -= PAGES_NUM;
   const size_t minsize   = sizeof(mi_segment_t) + ((capacity - 1) * sizeof(mi_page_t)) + 16 /* padding */;
   size_t guardsize = 0;
   size_t isize     = 0;
@@ -1257,6 +1259,7 @@ static mi_page_t* mi_segment_page_alloc(mi_heap_t* heap, size_t block_size, mi_p
   _mi_segment_page_start(_mi_page_segment(page), page, sizeof(void*), NULL, NULL)[0] = 0;
 #endif
   genmc_log("mi_segment_page_alloc end\n");
+  genmc_log("page allocated = %p\n", page);
   return page;
 }
 

@@ -33,7 +33,9 @@ static bool mi_heap_visit_pages(mi_heap_t* heap, heap_page_visitor_fun* fn, void
   for (size_t i = 0; i <= MI_BIN_FULL; i++) {
     mi_page_queue_t* pq = &heap->pages[i];
     mi_page_t* page = pq->first;
+    genmc_log("mi_heap_visit_pages, iter = %zu, page = %p\n", i, page);
     while(page != NULL) {
+      genmc_log("mi_heap_visit_pages, page = %p\n", page);
       mi_page_t* next = page->next; // save next in case the page gets removed from the queue
       mi_assert_internal(mi_page_heap(page) == heap);
       count++;
@@ -106,6 +108,7 @@ static bool mi_heap_page_never_delayed_free(mi_heap_t* heap, mi_page_queue_t* pq
   UNUSED(arg2);
   UNUSED(heap);
   UNUSED(pq);
+  genmc_log("mi_heap_page_never_delayed_free\n");
   _mi_page_use_delayed_free(page, MI_NEVER_DELAYED_FREE, false);
   return true; // don't break
 }
@@ -265,6 +268,8 @@ static bool _mi_heap_page_destroy(mi_heap_t* heap, mi_page_queue_t* pq, mi_page_
   UNUSED(arg2);
   UNUSED(heap);
   UNUSED(pq);
+
+  genmc_log("_mi_heap_page_destroy\n");
 
   // ensure no more thread_delayed_free will be added
   _mi_page_use_delayed_free(page, MI_NEVER_DELAYED_FREE, false);
