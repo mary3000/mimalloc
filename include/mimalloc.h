@@ -439,7 +439,7 @@ void *genmc_memcpy(void *dst, const void *src, size_t n);
 #if defined(GENMC_LOG)
 #define genmc_log(...) printf(__VA_ARGS__)
 #else
-#define genmc_log(...)
+#define genmc_log(...) 1
 #endif
 
 #endif

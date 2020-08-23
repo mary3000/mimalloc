@@ -33,7 +33,7 @@ terms of the MIT license. A copy of the license can be found in the file
 // Use C11 atomics
 #include <stdatomic.h>
 #define  mi_atomic(name)        atomic_##name
-#define  mi_memory_order(name)  memory_order_##name
+#define  mi_memory_order(name)  (genmc_log("atomic: %s, %d\n", __FILE__, __LINE__),memory_order_##name)
 #endif
 
 // Various defines for all used memory orders in mimalloc
@@ -49,7 +49,7 @@ terms of the MIT license. A copy of the license can be found in the file
 #define mi_atomic_store_relaxed(p,x)             mi_atomic(store_explicit)(p,x,mi_memory_order(relaxed))
 #define mi_atomic_exchange_release(p,x)          mi_atomic(exchange_explicit)(p,x,mi_memory_order(release))
 #define mi_atomic_exchange_acq_rel(p,x)          mi_atomic(exchange_explicit)(p,x,mi_memory_order(acq_rel))
-#define mi_atomic_cas_weak_release(p,exp,des)    (genmc_log("CWrel %d, %s\n", __LINE__, __FILE__),mi_atomic_cas_weak(p,exp,des,mi_memory_order(release),mi_memory_order(relaxed)))
+#define mi_atomic_cas_weak_release(p,exp,des)    (genmc_log("CWrel\n"),mi_atomic_cas_weak(p,exp,des,mi_memory_order(release),mi_memory_order(relaxed)))
 #define mi_atomic_cas_weak_acq_rel(p,exp,des)    (genmc_log("CWar\n"),mi_atomic_cas_weak(p,exp,des,mi_memory_order(acq_rel),mi_memory_order(acquire)))
 #define mi_atomic_cas_strong_release(p,exp,des)  (genmc_log("CSrel\n"),mi_atomic_cas_strong(p,exp,des,mi_memory_order(release),mi_memory_order(relaxed)))
 #define mi_atomic_cas_strong_acq_rel(p,exp,des)  (genmc_log("CSar\n"),mi_atomic_cas_strong(p,exp,des,mi_memory_order(acq_rel),mi_memory_order(acquire)))

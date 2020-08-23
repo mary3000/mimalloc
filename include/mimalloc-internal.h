@@ -465,6 +465,7 @@ static inline mi_heap_t* mi_page_heap(const mi_page_t* page) {
 }
 
 static inline void mi_page_set_heap(mi_page_t* page, mi_heap_t* heap) {
+  genmc_log("flag %s %d\n", __FILE__, __LINE__);
   mi_assert_internal(mi_page_thread_free_flag(page) != MI_DELAYED_FREEING);
   mi_atomic_store_release(&page->xheap,(uintptr_t)heap);
 }

@@ -220,6 +220,7 @@ void _mi_arena_free(void* p, size_t size, size_t memid, bool all_committed, mi_s
   if (size==0) return;
   if (memid == MI_MEMID_OS) {
     // was a direct OS allocation, pass through
+    genmc_log("_mi_arena_free _mi_os_free_ex\n");
     _mi_os_free_ex(p, size, all_committed, stats);
   }
   else {

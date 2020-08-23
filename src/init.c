@@ -248,6 +248,7 @@ static bool _mi_heap_done(mi_heap_t* heap) {
   // free if not the main thread
   if (heap != &_mi_heap_main) {
     mi_assert_internal(heap->tld->segments.count == 0 || heap->thread_id != _mi_thread_id());
+    genmc_log("_mi_heap_done %d _mi_os_free\n", pthread_self());
     _mi_os_free(heap, sizeof(mi_thread_data_t), &_mi_stats_main);
   }
 #if 0  

@@ -10,6 +10,7 @@ terms of the MIT license. A copy of the license can be found in the file
 
 #include <string.h>  // memset
 #include <stdio.h>
+#include <stddef.h>
 
 #define MI_PAGE_HUGE_ALIGN  (256*1024)
 
@@ -419,9 +420,10 @@ uint8_t* _mi_segment_page_start(const mi_segment_t* segment, const mi_page_t* pa
 
 static size_t mi_segment_size(size_t capacity, size_t required, size_t* pre_size, size_t* info_size)
 {
-  assert(capacity > PAGES_NUM);
-  capacity -= PAGES_NUM;
-  const size_t minsize   = sizeof(mi_segment_t) + ((capacity - 1) * sizeof(mi_page_t)) + 16 /* padding */;
+  genmc_log("capacity = %zu\n", capacity);
+  mi_assert_internal(capacity >= PAGES_NUM);
+  //capacity -= PAGES_NUM;
+  const size_t minsize   = sizeof(mi_segment_t) + ((capacity - PAGES_NUM) * sizeof(mi_page_t)) + 16 /* padding */;
   size_t guardsize = 0;
   size_t isize     = 0;
 
@@ -644,7 +646,8 @@ static mi_segment_t* mi_segment_init(mi_segment_t* segment, size_t required, mi_
   if (!pages_still_good) {
     // zero the segment info (but not the `mem` fields)
     ptrdiff_t ofs = offsetof(mi_segment_t, next);
-    genmc_log("mi_segment_init memset...\n");
+    genmc_log("mi_segment_init memset, offsetof = %d, addr = %p, addr_end = %p\n", ofs, (uint8_t*)segment + ofs,
+              (uint8_t*)segment + info_size);
     genmc_memset((uint8_t*)segment + ofs, 0, info_size - ofs);
 
     // initialize pages info
@@ -653,6 +656,20 @@ static mi_segment_t* mi_segment_init(mi_segment_t* segment, size_t required, mi_
       segment->pages[i].is_reset = false;
       segment->pages[i].is_committed = commit;
       segment->pages[i].is_zero_init = is_zero;
+
+      segment->pages[i].segment_in_use = false;
+      segment->pages[i].prev = NULL;
+      segment->pages[i].next = NULL;
+      segment->pages[i].free = NULL;
+      segment->pages[i].xblock_size = 0;
+      segment->pages[i].used = 0;
+      segment->pages[i].local_free = NULL;
+      segment->pages[i].capacity = 0;
+      segment->pages[i].retire_expire = 0;
+      atomic_store(&segment->pages[i].xthread_free, 0);
+
+
+      genmc_log("pages[%d]: free = %p, addr = %p\n", i, segment->pages[i].free, &segment->pages[i]);
     }
   }
   else {
@@ -965,12 +982,18 @@ void _mi_abandoned_await_readers(void) {
   } while (n != 0);
 }
 
+//void __VERIFIER_assume(int);
+
 // Pop from the abandoned list
 static mi_segment_t* mi_abandoned_pop(void) {
   mi_segment_t* segment;
   // Check efficiently if it is empty (or if the visited list needs to be moved)
   mi_tagged_segment_t ts = mi_atomic_load_relaxed(&abandoned);
   segment = mi_tagged_segment_ptr(ts);
+
+  //__VERIFIER_assume(pthread_self() <= segment != NULL);
+  //mi_assert_internal(segment != NULL);
+
   if (mi_likely(segment == NULL)) {
     if (mi_likely(!mi_abandoned_visited_revisit())) { // try to swap in the visited list on NULL
       return NULL;
@@ -1106,6 +1129,7 @@ static mi_segment_t* mi_segment_reclaim(mi_segment_t* segment, mi_heap_t* heap, 
       _mi_stat_decrease(&tld->stats->pages_abandoned, 1);
       // set the heap again and allow heap thread delayed free again.
       mi_page_set_heap(page, heap);
+      genmc_log("flag %s %d\n", __FILE__, __LINE__);
       _mi_page_use_delayed_free(page, MI_USE_DELAYED_FREE, true); // override never (after heap is set)
       // TODO: should we not collect again given that we just collected in `check_free`?
       _mi_page_free_collect(page, false); // ensure used count is up to date

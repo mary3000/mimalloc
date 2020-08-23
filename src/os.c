@@ -45,11 +45,12 @@ terms of the MIT license. A copy of the license can be found in the file
 #if defined(GENMC)
 void *genmc_memset(void *b, int c, size_t len) {
   genmc_log("genmc_memset\n");
+  memset(b, c, len);
   return NULL;
 }
 void *genmc_memcpy(void *dst, const void *src, size_t n) {
   genmc_log("genmc_memcpy\n");
-  //memcpy(dst, src, n);
+  memcpy(dst, src, n);
   return NULL;
 }
 #else
@@ -572,6 +573,7 @@ static void* mi_os_mem_alloc_aligned(size_t size, size_t alignment, bool commit,
 
   // if not aligned, free it, overallocate, and unmap around it
   if (((uintptr_t)p % alignment != 0)) {
+    genmc_log("not aligned! mi_os_mem_free\n");
     mi_os_mem_free(p, size, commit, stats);
     if (size >= (SIZE_MAX - alignment)) return NULL; // overflow
     size_t over_size = size + alignment;
@@ -615,6 +617,7 @@ static void* mi_os_mem_alloc_aligned(size_t size, size_t alignment, bool commit,
     size_t mid_size = _mi_align_up(size, _mi_os_page_size());
     size_t post_size = over_size - pre_size - mid_size;
     mi_assert_internal(pre_size < over_size && post_size < over_size && mid_size >= size);
+    genmc_log("pre post mi_os_mem_free\n");
     if (pre_size > 0)  mi_os_mem_free(p, pre_size, commit, stats);
     if (post_size > 0) mi_os_mem_free((uint8_t*)aligned_p + mid_size, post_size, commit, stats);
     // we can return the aligned pointer on `mmap` systems
@@ -640,10 +643,12 @@ void* _mi_os_alloc(size_t size, mi_stats_t* stats) {
 void  _mi_os_free_ex(void* p, size_t size, bool was_committed, mi_stats_t* stats) {
   if (size == 0 || p == NULL) return;
   size = _mi_os_good_alloc_size(size);
+  genmc_log("_mi_os_free_ex mi_os_mem_free\n");
   mi_os_mem_free(p, size, was_committed, stats);
 }
 
 void  _mi_os_free(void* p, size_t size, mi_stats_t* stats) {
+  genmc_log("_mi_os_free _mi_os_free_ex\n");
   _mi_os_free_ex(p, size, true, stats);
 }
 
@@ -1169,7 +1174,7 @@ static size_t mi_os_numa_node_countx(void) {
 }
 #endif
 
-#if defined(GENMC)
+#if defined(GENMC) && !defined(GENMC_BUG_NUMA)
 size_t _mi_numa_node_count = 1;   // hide data race
 #else
 size_t _mi_numa_node_count = 0;   // cache the node count

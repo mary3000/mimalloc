@@ -241,10 +241,10 @@ static bool mi_region_try_alloc_os(size_t blocks, bool commit, bool allow_large,
   // allocated, initialize and claim the initial blocks
   mem_region_t* r = &regions[idx];
   r->arena_memid  = arena_memid;
-  mi_atomic_store_release(&r->in_use, 0);
-  mi_atomic_store_release(&r->dirty, (is_zero ? 0 : MI_BITMAP_FIELD_FULL));
-  mi_atomic_store_release(&r->commit, (region_commit ? MI_BITMAP_FIELD_FULL : 0));
-  mi_atomic_store_release(&r->reset, 0);
+  mi_atomic_store_relaxed(&r->in_use, 0);
+  mi_atomic_store_relaxed(&r->dirty, (is_zero ? 0 : MI_BITMAP_FIELD_FULL));
+  mi_atomic_store_relaxed(&r->commit, (region_commit ? MI_BITMAP_FIELD_FULL : 0));
+  mi_atomic_store_relaxed(&r->reset, 0);
   *bit_idx = 0;
   mi_bitmap_claim(&r->in_use, 1, blocks, *bit_idx, NULL);
   mi_atomic_store_ptr_release(uint8_t*,&r->start, start);
@@ -271,7 +271,11 @@ static bool mi_region_try_alloc_os(size_t blocks, bool commit, bool allow_large,
 static bool mi_region_is_suitable(const mem_region_t* region, int numa_node, bool allow_large ) {
   // initialized at all?
   mi_region_info_t info;
+#if defined(GENMC) && !defined(GENMC_BUG_REGION)
+  info.value = mi_atomic_load_acquire(&((mem_region_t*)region)->info);
+#else
   info.value = mi_atomic_load_relaxed(&((mem_region_t*)region)->info);
+#endif
 #if defined(GENMC)
   info_from(&info);
 #endif

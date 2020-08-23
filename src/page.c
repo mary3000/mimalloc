@@ -130,16 +130,21 @@ void _mi_page_use_delayed_free(mi_page_t* page, mi_delayed_t delay, bool overrid
     tfree = mi_atomic_load_acquire(&page->xthread_free); // note: must acquire as we can break/repeat this loop and not do a CAS;
     tfreex = mi_tf_set_delayed(tfree, delay);
     old_delay = mi_tf_delayed(tfree);
+    genmc_log("flag %s %d\n", __FILE__, __LINE__);
     if (mi_unlikely(old_delay == MI_DELAYED_FREEING)) {
+      genmc_log("flag %s %d\n", __FILE__, __LINE__);
       mi_atomic_yield(); // delay until outstanding MI_DELAYED_FREEING are done.
       // tfree = mi_tf_set_delayed(tfree, MI_NO_DELAYED_FREE); // will cause CAS to busy fail
     }
     else if (delay == old_delay) {
+      genmc_log("flag %s %d\n", __FILE__, __LINE__);
       break; // avoid atomic operation if already equal
     }
     else if (!override_never && old_delay == MI_NEVER_DELAYED_FREE) {
+      genmc_log("flag %s %d\n", __FILE__, __LINE__);
       break; // leave never-delayed flag set
     }
+    genmc_log("flag %s %d\n", __FILE__, __LINE__);
   } while ((old_delay == MI_DELAYED_FREEING) ||
            !mi_atomic_cas_weak_release(&page->xthread_free, &tfree, tfreex));
 }

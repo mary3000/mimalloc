@@ -100,9 +100,9 @@ terms of the MIT license. A copy of the license can be found in the file
 // Main tuning parameters for segment and page sizes
 // Sizes for 64-bit, divide by two for 32-bit
 #if defined(GENMC)
-#define MI_SMALL_PAGE_SHIFT               (13 + MI_INTPTR_SHIFT)
-#define MI_MEDIUM_PAGE_SHIFT              ( 3 + MI_SMALL_PAGE_SHIFT)
-#define MI_LARGE_PAGE_SHIFT               ( 3 + MI_MEDIUM_PAGE_SHIFT)
+#define MI_SMALL_PAGE_SHIFT               (10 + MI_INTPTR_SHIFT)
+#define MI_MEDIUM_PAGE_SHIFT              ( 2 + MI_SMALL_PAGE_SHIFT)
+#define MI_LARGE_PAGE_SHIFT               ( 2 + MI_MEDIUM_PAGE_SHIFT)
 #define MI_SEGMENT_SHIFT                  ( MI_LARGE_PAGE_SHIFT)
 #else
 #define MI_SMALL_PAGE_SHIFT               (13 + MI_INTPTR_SHIFT)      // 64kb
@@ -264,7 +264,7 @@ typedef enum mi_page_kind_e {
 } mi_page_kind_t;
 
 #if defined(GENMC)
-#define PAGES_NUM 64
+#define PAGES_NUM 16
 #endif
 
 // Segments are large allocated memory blocks (2mb on 64 bit) from
