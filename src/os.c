@@ -976,7 +976,7 @@ static void* mi_os_alloc_huge_os_pagesx(void* addr, size_t size, int numa_node)
 #ifndef MPOL_PREFERRED
 #define MPOL_PREFERRED 1
 #endif
-#if defined(SYS_mbind)
+#if defined(SYS_mbind) && !defined(GENMC)
 static long mi_os_mbind(void* start, unsigned long len, unsigned long mode, const unsigned long* nmask, unsigned long maxnode, unsigned flags) {
   return syscall(SYS_mbind, start, len, mode, nmask, maxnode, flags);
 }
@@ -1114,7 +1114,7 @@ void _mi_os_free_huge_pages(void* p, size_t size, mi_stats_t* stats) {
 /* ----------------------------------------------------------------------------
 Support NUMA aware allocation
 -----------------------------------------------------------------------------*/
-#ifdef _WIN32  
+#if defined(_WIN32) && !defined(GENMC)
 static size_t mi_os_numa_nodex() {
   USHORT numa_node = 0;
   if (pGetCurrentProcessorNumberEx != NULL && pGetNumaProcessorNodeEx != NULL) {
@@ -1140,7 +1140,7 @@ static size_t mi_os_numa_node_countx(void) {
   GetNumaHighestNodeNumber(&numa_max);
   return ((size_t)numa_max + 1);
 }
-#elif defined(__linux__)
+#elif defined(__linux__) && !defined(GENMC)
 #include <sys/syscall.h>  // getcpu
 #include <stdio.h>        // access
 

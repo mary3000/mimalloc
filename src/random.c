@@ -164,7 +164,7 @@ To initialize a fresh random context we rely on the OS:
 If we cannot get good randomness, we fall back to weak randomness based on a timer and ASLR.
 -----------------------------------------------------------------------------*/
 
-#if defined(_WIN32)
+#if defined(_WIN32) && !defined(GENMC)
 /*
 // We prefer BCryptGenRandom over RtlGenRandom but it leads to a crash a when using dynamic override combined with the C++ runtime :-( 
 #pragma comment (lib,"bcrypt.lib")
@@ -196,7 +196,7 @@ static bool os_random_buf(void* buf, size_t buf_len) {
   arc4random_buf(buf, buf_len);
   return true;
 }
-#elif defined(__linux__)
+#elif defined(__linux__) && !defined(GENMC)
 #include <sys/syscall.h>
 #include <unistd.h>
 #include <sys/types.h>
