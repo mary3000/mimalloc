@@ -45,12 +45,12 @@ terms of the MIT license. A copy of the license can be found in the file
 #if defined(GENMC)
 void *genmc_memset(void *b, int c, size_t len) {
   genmc_log("genmc_memset\n");
-  memset(b, c, len);
+  //memset(b, c, len);
   return NULL;
 }
 void *genmc_memcpy(void *dst, const void *src, size_t n) {
   genmc_log("genmc_memcpy\n");
-  memcpy(dst, src, n);
+  //memcpy(dst, src, n);
   return NULL;
 }
 #else
